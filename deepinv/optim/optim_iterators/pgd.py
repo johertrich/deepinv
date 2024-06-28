@@ -1,12 +1,11 @@
 from .optim_iterator import OptimIterator, fStep, gStep
-from .utils import gradient_descent_step
 
 
 class PGDIteration(OptimIterator):
     r"""
     Iterator for proximal gradient descent.
 
-    Class for a single iteration of the Proximal Gradient Descent (PGD) algorithm for minimizing :math:` f(x) + \lambda g(x)`.
+    Class for a single iteration of the Proximal Gradient Descent (PGD) algorithm for minimizing :math:`f(x) + \lambda g(x)`.
 
     The iteration is given by
 
@@ -19,7 +18,7 @@ class PGDIteration(OptimIterator):
         \end{equation*}
 
 
-    where :math:`\gamma` is a stepsize that should satisfy :math:` \gamma \leq 2/\operatorname{Lip}(\|\nabla f\|)`.
+    where :math:`\gamma` is a stepsize that should satisfy :math:`\gamma \leq 2/\operatorname{Lip}(\|\nabla f\|)`.
 
     """
 
@@ -37,7 +36,7 @@ class FISTAIteration(OptimIterator):
     r"""
     Iterator for fast iterative soft-thresholding (FISTA).
 
-    Class for a single iteration of the FISTA algorithm for minimizing :math:` f(x) + \lambda g(x)` as proposed by
+    Class for a single iteration of the FISTA algorithm for minimizing :math:`f(x) + \lambda g(x)` as proposed by
     `Chambolle \& Dossal <https://inria.hal.science/hal-01060130v3/document>`_.
 
     The iteration is given by
@@ -45,15 +44,15 @@ class FISTAIteration(OptimIterator):
     .. math::
         \begin{equation*}
         \begin{aligned}
-        u_{k} &= x_k -  \gamma \nabla f(z_k) \\
+        u_{k} &= z_k -  \gamma \nabla f(z_k) \\
         x_{k+1} &= \operatorname{prox}_{\gamma \lambda g}(u_k) \\
         z_{k+1} &= x_{k+1} + \alpha_k (x_{k+1} - x_k),
         \end{aligned}
         \end{equation*}
 
 
-    where :math:`\gamma` is a stepsize that should satisfy :math:` \gamma \leq 1/\operatorname{Lip}(\|\nabla f\|)` and
-    :math:`\alpha_k = (t_k + a - 1)/(t_k + a)`.
+    where :math:`\gamma` is a stepsize that should satisfy :math:`\gamma \leq 1/\operatorname{Lip}(\|\nabla f\|)` and
+    :math:`\alpha_k = (k + a - 1) / (k + a) `.
     """
 
     def __init__(self, a=3, **kwargs):
@@ -79,8 +78,8 @@ class FISTAIteration(OptimIterator):
         :return: Dictionary `{"est": (x, z), "cost": F}` containing the updated current iterate and the estimated current cost.
         """
         x_prev, z_prev = X["est"][0], X["est"][1]
-        k = 2 if "it" not in X else X["it"]
-        alpha = (k - 1) / (k + self.a)
+        k = 0 if "it" not in X else X["it"]
+        alpha = (k + self.a - 1) / (k + self.a)
 
         if not self.g_first:
             z = self.f_step(z_prev, cur_data_fidelity, cur_params, y, physics)
@@ -120,7 +119,7 @@ class fStepPGD(fStep):
         """
         if not self.g_first:
             grad = cur_params["stepsize"] * cur_data_fidelity.grad(x, y, physics)
-            return gradient_descent_step(x, grad)
+            return x - grad
         else:
             return cur_data_fidelity.prox(x, y, physics, gamma=cur_params["stepsize"])
 
@@ -153,4 +152,4 @@ class gStepPGD(gStep):
                 * cur_params["stepsize"]
                 * cur_prior.grad(x, cur_params["g_param"])
             )
-            return gradient_descent_step(x, grad)
+            return x - grad

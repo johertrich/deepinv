@@ -52,6 +52,7 @@ def generate_dataset(
     device="cpu",
     train_datapoints=None,
     test_datapoints=None,
+    physics_generator=None,
     dataset_filename="dinv_dataset",
     batch_size=4,
     num_workers=0,
@@ -82,6 +83,8 @@ def generate_dataset(
         augmentation (which should be chosen in the train_dataset).
     :param int, None test_datapoints: Desired number of datapoints in the test dataset. If set to ``None``, it will use the
         number of datapoints in the base test dataset.
+    :param None, deepinv.physics.generator.PhysicsGenerator physics_generator: Optional physics generator for generating
+            the physics operators. If not None, the physics operators are randomly sampled at each iteration using the generator.
     :param str dataset_filename: desired filename of the dataset.
     :param int batch_size: batch size for generating the measurement data
         (it only affects the speed of the generating process)
@@ -147,8 +150,13 @@ def generate_dataset(
         x = x.to(device).unsqueeze(0)
 
         # choose operator and generate measurement
-        y = physics[g](x)
+        if physics_generator is not None:
+            params = physics_generator.step(batch_size=batch_size)
+            y = physics[g](x, **params)
+        else:
+            y = physics[g](x)
 
+        # TODO save params if physics_generator is not None
         torch.save(physics[g].state_dict(), f"{save_dir}/physics{g}.pt")
 
         if train_dataset is not None:
@@ -160,9 +168,19 @@ def generate_dataset(
             index = 0
 
             epochs = int(n_train_g / len(train_dataset)) + 1
-            for e in (progress_bar := tqdm(range(epochs), ncols=150, disable=(not verbose or not show_progress_bar))):
+            for e in (
+                progress_bar := tqdm(
+                    range(epochs),
+                    ncols=150,
+                    disable=(not verbose or not show_progress_bar),
+                )
+            ):
 
-                desc = f"Generating dataset operator {g + 1}" if G > 1 else "Generating train dataset"
+                desc = (
+                    f"Generating dataset operator {g + 1}"
+                    if G > 1
+                    else "Generating train dataset"
+                )
                 progress_bar.set_description(desc)
 
                 train_dataloader = DataLoader(
@@ -192,9 +210,11 @@ def generate_dataset(
                     if bsize + index > n_train_g:
                         bsize = n_train_g - index
 
-                    hf["y_train"][index: index + bsize] = y[:bsize, :].to("cpu").numpy()
+                    hf["y_train"][index : index + bsize] = (
+                        y[:bsize, :].to("cpu").numpy()
+                    )
                     if supervised:
-                        hf["x_train"][index: index + bsize] = (
+                        hf["x_train"][index : index + bsize] = (
                             x[:bsize, ...].to("cpu").numpy()
                         )
                     index = index + bsize
@@ -231,8 +251,8 @@ def generate_dataset(
 
                 # Add new data to it
                 bsize = x.size()[0]
-                hf["x_test"][index: index + bsize] = x.to("cpu").numpy()
-                hf["y_test"][index: index + bsize] = y.to("cpu").numpy()
+                hf["x_test"][index : index + bsize] = x.to("cpu").numpy()
+                hf["y_test"][index : index + bsize] = y.to("cpu").numpy()
                 index = index + bsize
         hf.close()
 
